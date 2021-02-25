@@ -136,7 +136,6 @@ if (fs.existsSync(URI_FILE_LOG)) {
 /*--------------------------------------------------------------------- */
 
 fastify.get("/", async (request, reply) => {
-  console.log(request);
   const host = request.headers.host;
   return {
     message: "Server online",
@@ -149,7 +148,6 @@ fastify.get("/", async (request, reply) => {
 
 fastify.get("/get-all-csv", async (request, reply) => {
   const listFiles = Object.values(getFiles());
-
   return {
     latest: listFiles[listFiles.length - 1],
     list: listFiles,
@@ -157,8 +155,6 @@ fastify.get("/get-all-csv", async (request, reply) => {
 });
 
 fastify.get("/get-csv/:file", async (request, reply) => {
-  // console.log(request.params);
-
   const fileName = request.params.file;
   let file;
   if (existFileInDB(fileName)) {
