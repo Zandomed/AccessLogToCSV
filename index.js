@@ -128,7 +128,8 @@ if (fs.existsSync(URI_FILE_LOG)) {
     }
   );
 } else {
-  throw new Error(`No exist File access.log in ${URI_FILE_LOG}`);
+  console.error(`No exist File access.log in ${URI_FILE_LOG}${BREAK_LINE}`);
+  process.exit(0);
 }
 
 /*--------------------------------------------------------------------- */
