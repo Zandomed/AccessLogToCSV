@@ -6,6 +6,9 @@ const fastify = require("fastify")({
 });
 const { getNameFile, existFileInDB, setFile, getFiles } = initializeDatabase();
 
+/**
+ * Puerto de servidor Web
+ */
 const PORT = 5000;
 const BREAK_LINE = `\r\n`;
 const REGEXP_FOR_CONTENT = new RegExp(
@@ -18,10 +21,22 @@ let lengthLineFileLog = 0;
 let NAME_FILE_CSV = "";
 let NAME_FILE_WITHOUT_EXT = "";
 
+/**
+ * Nombre del archivo access
+ */
 const NAME_FILE_LOG = "access_log";
+/**
+ * Nombre del directorio donde se almacenaran los CSV
+ */
 const NAME_DIR_CSV = "files";
 
+/**
+ * Ubicacion de la carpeta de los archivos CSV
+ */
 const URI_DIR_CSV = resolve(__dirname, NAME_DIR_CSV);
+/**
+ * Ubicacion del archivo access_log
+ */
 const URI_FILE_LOG = resolve("/var", "log", "apache2", NAME_FILE_LOG);
 
 /**
@@ -143,6 +158,7 @@ fastify.get("/", async (request, reply) => {
     endpoints: {
       getAllCSV: `http://${host}/get-all-csv`,
       getUniqueCSV: `http://${host}/get-csv/${NAME_FILE_WITHOUT_EXT}`,
+      getLastCSV: `http://${host}/get-last-csv`
     },
   };
 });
@@ -160,6 +176,20 @@ fastify.get("/get-csv/:file", async (request, reply) => {
   let file;
   if (existFileInDB(fileName)) {
     file = openReadStreamCSV(`${fileName}.csv`);
+    reply.header("Content-disposition", `attachment; filename=${fileName}.csv`);
+    reply.header("Content-Type", "text/csv");
+    reply.status(200).send(file);
+    return new Promise();
+  } else {
+    reply.status(404);
+    return `Not Found File CSV with date: ${fileName}`;
+  }
+});
+
+fastify.get("/get-last-csv", async (request, reply) => {
+  const fileName = NAME_FILE_WITHOUT_EXT;
+  if (existFileInDB(fileName)) {
+    const file = openReadStreamCSV(`${fileName}.csv`);
     reply.header("Content-disposition", `attachment; filename=${fileName}.csv`);
     reply.header("Content-Type", "text/csv");
     reply.status(200).send(file);
