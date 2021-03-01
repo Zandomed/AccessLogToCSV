@@ -15,7 +15,12 @@ const REGEXP_FOR_CONTENT = new RegExp(
   /(?<ip>(?:(?:[1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])|localhost|::1) (?<separator>\-) (?<user>.+|\-) \[(?<date>.+)\] \"(?<method>GET|POST|PUT|DELETE|OPTIONS|CONNECT|\-).*\" (?<code>[0-9]{3}) (?<byte>\d+|-)/,
   "gm"
 );
+const REGEXP_FOR_SUBSTITUTION_SCORE = new RegExp(/^\-$/, "gm");
 
+/**
+ * Variables de uso interno
+ * (No Modificar)
+ */
 let fileStreamCSV = null;
 let lengthLineFileLog = 0;
 let NAME_FILE_CSV = "";
@@ -133,7 +138,9 @@ if (fs.existsSync(URI_FILE_LOG)) {
           lengthLineFileLogNow - lengthLineFileLog
         );
         for (const log of listLogFilterNews) {
-          const values = Object.values(log.groups);
+          const values = Object.values(log.groups).map((value) =>
+            value.replace(REGEXP_FOR_SUBSTITUTION_SCORE, "0")
+          );
           fileStreamCSV.write(`${values.join(";")}${BREAK_LINE}`);
         }
         lengthLineFileLog = lengthLineFileLogNow;
@@ -158,7 +165,7 @@ fastify.get("/", async (request, reply) => {
     endpoints: {
       getAllCSV: `http://${host}/get-all-csv`,
       getUniqueCSV: `http://${host}/get-csv/${NAME_FILE_WITHOUT_EXT}`,
-      getLastCSV: `http://${host}/get-last-csv`
+      getLastCSV: `http://${host}/get-last-csv`,
     },
   };
 });
