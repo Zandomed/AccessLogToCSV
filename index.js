@@ -12,10 +12,13 @@ const { getNameFile, existFileInDB, setFile, getFiles } = initializeDatabase();
 const PORT = 5000;
 const BREAK_LINE = `\r\n`;
 const REGEXP_FOR_CONTENT = new RegExp(
-  /(?<ip>(?:(?:[1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])|localhost|::1) (?<separator>\-) (?<user>.+|\-) \[(?<date>.+)\] \"(?<method>GET|POST|PUT|DELETE|OPTIONS|CONNECT|\-).*\" (?<code>[0-9]{3}) (?<byte>\d+|-)/,
+  /(?<ip>(?:(?:[1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])|localhost|::1) (?<separator>\-) (?<user>.+|\-) \[(?<date>.+)\] \"(\-|(?<method>.*) (?<url>.*)? (?<protocol>.*)?)\" (?<code>[0-9]{3}) (?<byte>\d+|-)/,
   "gm"
 );
 const REGEXP_FOR_SUBSTITUTION_SCORE = new RegExp(/^\-$/, "gm");
+const HEADER_FILE =
+  "IP;IDENTIDAD;USER;FECHA Y HORA;METODO;PETICION URL;PROTOCOLO;CODIGO ESTADO;TAMAÑO" +
+  BREAK_LINE;
 
 /**
  * Variables de uso interno
@@ -67,8 +70,8 @@ const setNewNameFile = (nameFile) => {
  * @function
  * Abre el Stream de escritura del archivo CSV
  */
-const openWriteStreamCSV = () =>
-  fs.createWriteStream(getUriFileCSV(), {
+const openWriteStreamCSV = (nameFile = NAME_FILE_CSV) =>
+  fs.createWriteStream(getUriFileCSV(nameFile), {
     autoClose: true,
     encoding: "utf-8",
     flags: "a",
@@ -102,11 +105,6 @@ const getLengthLog = () => {
 };
 
 /**
- * Setteo del nombre del archivo a trabajar al inicializar al script
- */
-setNewNameFile(getNameFile());
-
-/**
  * Validación de existencia de archivo CSV; En caso contrario, crear la
  * carpeta y archivo para su escritura
  */
@@ -114,7 +112,17 @@ if (!fs.existsSync(URI_DIR_CSV)) {
   fs.emptyDirSync(URI_DIR_CSV);
 }
 
-fileStreamCSV = openWriteStreamCSV();
+const nameFile = getNameFile();
+fileStreamCSV = openWriteStreamCSV(`${nameFile}.csv`);
+
+if (!existFileInDB(nameFile)) {
+  fileStreamCSV.write(HEADER_FILE);
+}
+
+/**
+ * Setteo del nombre del archivo a trabajar al inicializar al script
+ */
+setNewNameFile(nameFile);
 
 if (fs.existsSync(URI_FILE_LOG)) {
   lengthLineFileLog = getLengthLog();
@@ -123,8 +131,11 @@ if (fs.existsSync(URI_FILE_LOG)) {
     { interval: 1000, persistent: true },
     (curr, prev) => {
       if (!existFileInDB()) {
-        setNewNameFile(getNameFile());
-        fileStreamCSV = openWriteStreamCSV();
+        const fileName = getNameFile();
+        fileStreamCSV = openWriteStreamCSV(`${nameFile}.csv`);
+        fileStreamCSV.write(HEADER_FILE);
+        setNewNameFile(fileName);
+
         lengthLineFileLog = 0;
       }
 
@@ -139,7 +150,7 @@ if (fs.existsSync(URI_FILE_LOG)) {
         );
         for (const log of listLogFilterNews) {
           const values = Object.values(log.groups).map((value) =>
-            value.replace(REGEXP_FOR_SUBSTITUTION_SCORE, "0")
+            value ? value.replace(REGEXP_FOR_SUBSTITUTION_SCORE, "0") : "0"
           );
           fileStreamCSV.write(`${values.join(";")}${BREAK_LINE}`);
         }
