@@ -4,12 +4,17 @@ const { initializeDatabase } = require("./database");
 const fastify = require("fastify")({
   logger: false,
 });
+
+const io = require("socket.io-client");
+
 const { getNameFile, existFileInDB, setFile, getFiles } = initializeDatabase();
 
 /**
  * Puerto de servidor Web
  */
 const PORT = 5000;
+const PORT_SOCKET = 4000;
+const URL_CONNECT_SOCKET = `http://localhost:${PORT_SOCKET}`;
 const BREAK_LINE = `\r\n`;
 const REGEXP_FOR_CONTENT = new RegExp(
   /(?<ip>(?:(?:[1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(?:[1-9]?[0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])|localhost|::1) (?<separator>\-) (?<user>.+|\-) \[(?<date>.+)\] \"(\-|(?<method>.*) (?<url>.*)? (?<protocol>.*)?)\" (?<code>[0-9]{3}) (?<byte>\d+|-)/,
@@ -19,20 +24,16 @@ const REGEXP_FOR_SUBSTITUTION_SCORE = new RegExp(/^\-$/, "gm");
 const HEADER_FILE =
   "IP;IDENTIDAD;USER;FECHA Y HORA;METODO;PETICION URL;PROTOCOLO;CODIGO ESTADO;TAMAÑO" +
   BREAK_LINE;
+const socket = io(URL_CONNECT_SOCKET);
 
 /**
  * Variables de uso interno
  * (No Modificar)
  */
 let fileStreamCSV = null;
-let lengthLineFileLog = 0;
 let NAME_FILE_CSV = "";
 let NAME_FILE_WITHOUT_EXT = "";
 
-/**
- * Nombre del archivo access
- */
-const NAME_FILE_LOG = "access_log";
 /**
  * Nombre del directorio donde se almacenaran los CSV
  */
@@ -42,10 +43,6 @@ const NAME_DIR_CSV = "files";
  * Ubicacion de la carpeta de los archivos CSV
  */
 const URI_DIR_CSV = resolve(__dirname, NAME_DIR_CSV);
-/**
- * Ubicacion del archivo access_log
- */
-const URI_FILE_LOG = resolve("/var", "log", "apache2", NAME_FILE_LOG);
 
 /**
  * @function
@@ -86,23 +83,9 @@ const openReadStreamCSV = (nameFile = NAME_FILE_CSV) =>
 
 /**
  * @function
- * Lee el contenido del archivo Log codificado en UTF-8
- */
-const readFileLog = () => fs.readFileSync(URI_FILE_LOG, { encoding: "utf-8" });
-
-/**
- * @function
  * Aplica la expresión regular al archivo Log para obtener cada linea del Log organizada
  */
-const applyRegExpInFileLog = () => readFileLog().matchAll(REGEXP_FOR_CONTENT);
-/**
- * @function
- * Obtiene la longitud actual de filas del archivo Log
- */
-const getLengthLog = () => {
-  const formatMatchLog = applyRegExpInFileLog();
-  return formatMatchLog ? Array.from(formatMatchLog).length : 0;
-};
+const applyRegExpInFileLog = (value) => value.matchAll(REGEXP_FOR_CONTENT);
 
 /**
  * Validación de existencia de archivo CSV; En caso contrario, crear la
@@ -124,46 +107,28 @@ if (!existFileInDB(nameFile)) {
  */
 setNewNameFile(nameFile);
 
-if (fs.existsSync(URI_FILE_LOG)) {
-  lengthLineFileLog = getLengthLog();
-  fs.watchFile(
-    URI_FILE_LOG,
-    { interval: 1000, persistent: true },
-    (curr, prev) => {
-      if (!existFileInDB()) {
-        const fileName = getNameFile();
-        fileStreamCSV = openWriteStreamCSV(`${nameFile}.csv`);
-        fileStreamCSV.write(HEADER_FILE);
-        setNewNameFile(fileName);
+socket.on("change_log", (lineLog) => {
+  if (!existFileInDB()) {
+    const fileName = getNameFile();
+    fileStreamCSV = openWriteStreamCSV(`${nameFile}.csv`);
+    fileStreamCSV.write(HEADER_FILE);
+    setNewNameFile(fileName);
+  }
 
-        lengthLineFileLog = 0;
-      }
+  const matchRegexpIterable = applyRegExpInFileLog(lineLog);
+  if (matchRegexpIterable) {
+    const listLog = Array.from(matchRegexpIterable);
 
-      const matchRegexpIterable = applyRegExpInFileLog();
-
-      if (matchRegexpIterable) {
-        const listLog = Array.from(matchRegexpIterable);
-        const lengthLineFileLogNow = listLog.length;
-        const listLogFilterNews = listLog.splice(
-          lengthLineFileLog,
-          lengthLineFileLogNow - lengthLineFileLog
-        );
-        for (const log of listLogFilterNews) {
-          const values = Object.values(log.groups).map((value) =>
-            value ? value.replace(REGEXP_FOR_SUBSTITUTION_SCORE, "0") : "0"
-          );
-          fileStreamCSV.write(`${values.join(";")}${BREAK_LINE}`);
-        }
-        lengthLineFileLog = lengthLineFileLogNow;
-      } else {
-        lengthLineFileLog = 0;
-      }
+    for (const log of listLog) {
+      const values = Object.values(log.groups).map((value) =>
+        value ? value.replace(REGEXP_FOR_SUBSTITUTION_SCORE, "0") : "0"
+      );
+      fileStreamCSV.write(`${values.join(";")}${BREAK_LINE}`);
     }
-  );
-} else {
-  console.error(`No exist File access.log in ${URI_FILE_LOG}${BREAK_LINE}`);
-  process.exit(0);
-}
+  }
+});
+
+// }
 
 /*--------------------------------------------------------------------- */
 /*                              Servidor Web                            */
@@ -228,3 +193,4 @@ fastify.listen(PORT, "::", (err, address) => {
   }
   fastify.log.info(`server listening on ${address}`);
 });
+//
